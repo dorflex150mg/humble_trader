@@ -10,6 +10,8 @@ pub mod trader {
     use websocket::result::WebSocketResult;
     use websocket::sync::Client;
     use websocket::WebSocketError;
+    use websocket::OwnedMessage;
+    use websocket::stream::sync::NetworkStream;
 
     #[derive(Error, Debug, derive_more::From, derive_more::Display)]
     pub enum ClientError {
@@ -24,21 +26,27 @@ pub mod trader {
     pub struct Trader {
         endpoint: String,
         subs_endpoint: String,
-        client: Client<TcpStream>,
+        //client: Client<TcpStream>,
+        client: Client<Box<dyn NetworkStream + std::marker::Send>>,
     }
 
     impl TraderBuilder {
-        pub fn new(endpoint_file_path: &str, 
-            subs_endpoint_file_path: &str) -> Result<Self, Box<dyn std::error::Error + 'static>>  { 
+        pub fn new(endpoint_file_path: &str) -> Result<Self, Box<dyn std::error::Error + 'static>>  { 
             let ep_data = fs::read(&endpoint_file_path)?;
             let endpoint_str = match from_utf8(&ep_data) { 
                 Ok(s) => s,
                 Err(e) => panic!("File {} is corrupted. Failed with error: {}", endpoint_file_path, e),
             };
-            let endpoints_slc: Vec<&str> = endpoint_str.split("\n").collect();
-            let endpoint_lines: Vec<String> = endpoints_slc.iter().map(|slc| {
-                    slc.to_string()
-                }).collect();
+            let mut endpoints_slc: Vec<&str> = endpoint_str.split("\n").collect();
+            if endpoints_slc.iter().count() == 0 {
+                panic!("File is empty");
+            }
+            let endpoint_lines: Vec<String> = endpoints_slc.iter()
+                .filter(|&line| { *line != "" })
+                .into_iter()
+                .map(|slc| {slc.to_string()}) 
+                .collect();
+
             let endpoints: HashMap<String, Vec<String>> = endpoint_lines
                 .iter()
                 .map(|line| {
@@ -53,8 +61,8 @@ pub mod trader {
 
 
         pub fn build(&self, key: String) -> Option<Trader> {
-            match self.endpoints.get(key) {
-                Some(ep) => Some(Trader::new(ep[0], ep[1])),
+            match self.endpoints.get(&key) {
+                Some(ep) => Some(Trader::new(ep[0].clone(), ep[1].clone()).unwrap()),
                 None => None,
            }
         }
@@ -62,17 +70,24 @@ pub mod trader {
 
     impl Trader {
         pub fn new(endpoint: String, subs_endpoint: String) -> Result<Self, ClientError> {
-            let client = ClientBuilder::new(endpoint)?
-                .connect()?;
+            println!("creatin trader with endpoint: {}", &endpoint);
+            let client = match ClientBuilder::new(&endpoint)?
+                .connect(None) {
+                    Ok(c) => c,
+                    Err(e) => panic!("Client building failed with: {:?}", e),
+                };
+
             Ok(Trader {
                 endpoint,
+                subs_endpoint,
                 client,
             })
         }
 
-        pub fn subscribe(&self) -> Result<(), ClientError>{
-            let msg = self.subscribe_msg(1);
-            self.client.send_message(&Message::text(&msg))?
+        pub fn subscribe(&mut self) -> Result<&mut Self, ClientError>{
+            let msg = self.subscribe_msg(50);
+            self.client.send_message(&Message::text(&msg))?;
+            Ok(self)
         }
 
         
@@ -83,6 +98,24 @@ pub mod trader {
             raw
         }
 
+        pub fn read_message(&mut self) -> String {
+            match self.client.recv_message()
+                .unwrap() {
+                    OwnedMessage::Text(string) => string,
+                    _ => panic!("wrong message type"),
+                }
+        }
+
+        pub fn read_stream(&mut self) { 
+            for message in self.client.incoming_messages() {
+                let inner = &message.unwrap();
+                let content = match inner {
+                    OwnedMessage::Text(string) => string,
+                    _ => panic!("wrong message type"),
+                };
+                println!("Message from stream: {}", content);
+            }
+        } 
     }
 }
 

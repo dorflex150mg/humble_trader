@@ -4,9 +4,15 @@ mod trader;
 
 #[tokio::main]
 async fn main() {
-    let trader = match TraderBuilder::new("./endpoints.dat") {
-        Ok(t) => t,
-        Err(e) => panic!("Cannot create trader: {}", e),
-    };
+    let mut trader = TraderBuilder::new("./endpoints.dat")
+        .unwrap()
+        .build("binance".to_string())
+        .unwrap();
+    let subs_trader = trader
+        .subscribe() 
+        .unwrap();
+    //println!("reading: {}", subs_trader.read_stream());
+    subs_trader.read_stream();
+        
 }
 
