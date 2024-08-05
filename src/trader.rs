@@ -1,17 +1,25 @@
 pub mod trader {
 
-    use websocket::{ClientBuilder, Message};
-    use std::net::TcpStream;
-    use std::collections::HashMap;
-    use std::fs;
-    use std::str::from_utf8;
+    use std::{fs,
+              fmt,
+              str::from_utf8,
+              collections::HashMap,
+              net::TcpStream,
+    };
+    use websocket::{ClientBuilder, 
+                    Message,
+                    WebSocketError, 
+                    OwnedMessage,
+                    client::ParseError,
+                    result::WebSocketResult,
+                    sync::Client,
+                    stream::sync::NetworkStream,
+
+    };
     use thiserror::Error;
-    use websocket::client::ParseError;
-    use websocket::result::WebSocketResult;
-    use websocket::sync::Client;
-    use websocket::WebSocketError;
-    use websocket::OwnedMessage;
-    use websocket::stream::sync::NetworkStream;
+    use chrono::{NaiveDate, NaiveDateTime};
+    use json::JsonValue;
+
 
     #[derive(Error, Debug, derive_more::From, derive_more::Display)]
     pub enum ClientError {
@@ -21,6 +29,17 @@ pub mod trader {
 
     pub struct TraderBuilder {
         endpoints: HashMap<String, Vec<String>>,
+    }
+
+    pub struct PriceReading {
+        timestamp: NaiveDateTime,
+        price: f64,
+    }
+
+    impl fmt::Display for PriceReading {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "Time: {}, Price: {}", self.timestamp.timestamp(), self.price)
+        }
     }
 
     pub struct Trader {
@@ -109,11 +128,28 @@ pub mod trader {
         pub fn read_stream(&mut self) { 
             for message in self.client.incoming_messages() {
                 let inner = &message.unwrap();
-                let content = match inner {
-                    OwnedMessage::Text(string) => string,
+                let json = match inner {
+                    OwnedMessage::Text(string) => {
+                        json::parse(string).unwrap()
+                    }
                     _ => panic!("wrong message type"),
                 };
-                println!("Message from stream: {}", content);
+                let content = match json["E"].is_null() || json["c"].is_null() { 
+                    true => None,
+                    false => { 
+                        let unix_timestamp: &i64 = &json["E"].as_i64().unwrap();
+                        let timestamp = NaiveDateTime::from_timestamp(*unix_timestamp, 0);
+                        let closing_price: &f64 = &json["c"].as_str().unwrap().parse::<f64>().unwrap(); 
+                        Some(PriceReading {
+                            timestamp,
+                            price: *closing_price,
+                        })
+                    }
+                };
+                match content {
+                    Some(c) => println!("Message from stream: {}", c),
+                    None => println!("Invalid price message received from stream"),
+                }
             }
         } 
     }
