@@ -21,11 +21,20 @@ use thiserror::Error;
 use chrono::{NaiveDate, NaiveDateTime};
 use json::JsonValue;
 
+pub const NAME: &str = "binance";
+
 pub struct PlatformBinance {
     name: Rc<str>,
 }
 
 impl PlatformBinance {
+
+    pub fn new() -> Self {
+        PlatformBinance {
+            name: NAME.into(),
+        }
+    }
+
     fn subscribe_msg(&self, trader: &mut Trader, id: u32) -> String { 
         let raw = format!(r#"{{"method": "SUBSCRIBE",
                       "params": ["{}"], "id": {}}}"#, trader.subs_endpoint, id);

@@ -19,6 +19,8 @@ pub mod trader {
     use thiserror::Error;
     use chrono::{NaiveDate, NaiveDateTime};
     use json::JsonValue;
+    use crate::platform::platform::{Platform, PlatformError};
+    use crate::platform::platform;
 
 
     #[derive(Error, Debug, derive_more::From, derive_more::Display)]
@@ -80,14 +82,18 @@ pub mod trader {
 
         pub fn build(&self, key: String) -> Option<Trader> {
             match self.endpoints.get(&key) {
-                Some(ep) => Some(Trader::new(ep[0].clone(), ep[1].clone()).unwrap()),
+                Some(ep) => Some(Trader::new(&key, ep[0].clone(), ep[1].clone()).unwrap()),
                 None => None,
            }
         }
     }
 
     impl Trader {
-        pub fn new(endpoint: String, subs_endpoint: String) -> Result<Self, ClientError> {
+        pub fn new(platform_name: &str, endpoint: String, subs_endpoint: String) -> Result<Self, ClientError> {
+            let platform = match platform::create_platform(platform_name.to_string()) {
+                Ok(p) => p,
+                Err(PlatformError::InvalidPlatformError(e)) => panic!("Failed with: {}", e)
+            };
             println!("creatin trader with endpoint: {}", &endpoint);
             let client = match ClientBuilder::new(&endpoint)?
                 .connect(None) {
@@ -107,7 +113,6 @@ pub mod trader {
             self.client.send_message(&Message::text(&msg))?;
             Ok(self)
         }
-
         
         fn subscribe_msg(&self, id: u32) -> String { 
             let raw = format!(r#"{{"method": "SUBSCRIBE",
