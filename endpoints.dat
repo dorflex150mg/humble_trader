@@ -1,1 +1,2 @@
 binance,wss://stream.binance.com:9443/ws,btcusdt@ticker
+bybit,wss://stream.bybit.com/v5/public/spot,tickers.BTCUSDT

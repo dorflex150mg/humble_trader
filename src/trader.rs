@@ -32,8 +32,8 @@ pub mod trader {
     }
 
     pub struct PriceReading {
-        timestamp: NaiveDateTime,
-        price: f64,
+        pub timestamp: NaiveDateTime,
+        pub price: f64,
     }
 
     impl fmt::Display for PriceReading {
@@ -43,10 +43,9 @@ pub mod trader {
     }
 
     pub struct Trader {
-        endpoint: String,
-        subs_endpoint: String,
-        //client: Client<TcpStream>,
-        client: Client<Box<dyn NetworkStream + std::marker::Send>>,
+        pub endpoint: String,
+        pub subs_endpoint: String,
+        pub client: Client<Box<dyn NetworkStream + std::marker::Send>>,
     }
 
     impl TraderBuilder {
@@ -115,14 +114,6 @@ pub mod trader {
                           "params": ["{}"], "id": {}}}"#, self.subs_endpoint, id);
             println!("raw: {}", &raw);
             raw
-        }
-
-        pub fn read_message(&mut self) -> String {
-            match self.client.recv_message()
-                .unwrap() {
-                    OwnedMessage::Text(string) => string,
-                    _ => panic!("wrong message type"),
-                }
         }
 
         pub fn read_stream(&mut self) { 
