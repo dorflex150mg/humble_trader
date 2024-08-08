@@ -35,9 +35,9 @@ impl PlatformBinance {
         }
     }
 
-    fn subscribe_msg(&self, trader: &mut Trader, id: u32) -> String { 
+    fn subscribe_msg(&self, subs_endpoint: &str, id: u32) -> String { 
         let raw = format!(r#"{{"method": "SUBSCRIBE",
-                      "params": ["{}"], "id": {}}}"#, trader.subs_endpoint, id);
+                      "params": ["{}"], "id": {}}}"#, subs_endpoint, id);
         println!("raw: {}", &raw);
         raw
     }
@@ -49,14 +49,17 @@ impl Platform for PlatformBinance {
         self.name.clone()
     }
 
-    fn subscribe<'a>(&'a self, trader: &'a mut Trader) -> Result<&mut Trader, ClientError>{
-        let msg = self.subscribe_msg(trader, 50);
-        trader.client.send_message(&Message::text(&msg))?;
-        Ok(trader)
+    fn subscribe<'a>(&'a self, client: &'a mut Client<Box<dyn NetworkStream + std::marker::Send>>, 
+            subs_endpoint: &str) -> 
+                Result<&mut Client<Box<dyn NetworkStream + std::marker::Send>>, ClientError>{
+        let msg = self.subscribe_msg(subs_endpoint, 50);
+        client.send_message(&Message::text(&msg))?;
+        Ok(client)
     }
 
-    fn read_stream<'a> (&'a self, trader: &'a mut Trader) { 
-        for message in trader.client.incoming_messages() {
+    fn read_stream<'a> (&'a self, client: &'a mut 
+            Client<Box<dyn NetworkStream + std::marker::Send>>) { 
+        for message in client.incoming_messages() {
             let inner = &message.unwrap();
             let json = match inner {
                 OwnedMessage::Text(string) => {

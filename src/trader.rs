@@ -48,6 +48,7 @@ pub mod trader {
         pub endpoint: String,
         pub subs_endpoint: String,
         pub client: Client<Box<dyn NetworkStream + std::marker::Send>>,
+        pub platform: Box<dyn Platform>,
     }
 
     impl TraderBuilder {
@@ -89,8 +90,9 @@ pub mod trader {
     }
 
     impl Trader {
-        pub fn new(platform_name: &str, endpoint: String, subs_endpoint: String) -> Result<Self, ClientError> {
-            let platform = match platform::create_platform(platform_name.to_string()) {
+        pub fn new(platform_name: &str, 
+                    endpoint: String, subs_endpoint: String) -> Result<Self, ClientError> {
+            let concrete_platform = match platform::create_platform(platform_name.to_string()) {
                 Ok(p) => p,
                 Err(PlatformError::InvalidPlatformError(e)) => panic!("Failed with: {}", e)
             };
@@ -105,48 +107,52 @@ pub mod trader {
                 endpoint,
                 subs_endpoint,
                 client,
+                platform: Box::new(concrete_platform),
             })
         }
 
-        pub fn subscribe(&mut self) -> Result<&mut Self, ClientError>{
-            let msg = self.subscribe_msg(50);
-            self.client.send_message(&Message::text(&msg))?;
-            Ok(self)
+        pub fn subscribe(&mut self) -> Result<&mut Client<Box<dyn NetworkStream + std::marker::Send>>, 
+                ClientError>{
+            Ok(self.platform.subscribe(&mut self.client, self.subs_endpoint.as_str())?)
+            //let msg = self.subscribe_msg(50);
+            //self.client.send_message(&Message::text(&msg))?;
+            //Ok(self)
         }
         
-        fn subscribe_msg(&self, id: u32) -> String { 
-            let raw = format!(r#"{{"method": "SUBSCRIBE",
-                          "params": ["{}"], "id": {}}}"#, self.subs_endpoint, id);
-            println!("raw: {}", &raw);
-            raw
-        }
+        //fn subscribe_msg(&self, id: u32) -> String { 
+        //    let raw = format!(r#"{{"method": "SUBSCRIBE",
+        //                  "params": ["{}"], "id": {}}}"#, self.subs_endpoint, id);
+        //    println!("raw: {}", &raw);
+        //    raw
+        //}
 
         pub fn read_stream(&mut self) { 
-            for message in self.client.incoming_messages() {
-                let inner = &message.unwrap();
-                let json = match inner {
-                    OwnedMessage::Text(string) => {
-                        json::parse(string).unwrap()
-                    }
-                    _ => panic!("wrong message type"),
-                };
-                let content = match json["E"].is_null() || json["c"].is_null() { 
-                    true => None,
-                    false => { 
-                        let unix_timestamp: &i64 = &json["E"].as_i64().unwrap();
-                        let timestamp = NaiveDateTime::from_timestamp(*unix_timestamp, 0);
-                        let closing_price: &f64 = &json["c"].as_str().unwrap().parse::<f64>().unwrap(); 
-                        Some(PriceReading {
-                            timestamp,
-                            price: *closing_price,
-                        })
-                    }
-                };
-                match content {
-                    Some(c) => println!("Message from stream: {}", c),
-                    None => println!("Invalid price message received from stream"),
-                }
-            }
+            self.platform.read_stream(&mut self.client)
+            //for message in self.client.incoming_messages() {
+            //    let inner = &message.unwrap();
+            //    let json = match inner {
+            //        OwnedMessage::Text(string) => {
+            //            json::parse(string).unwrap()
+            //        }
+            //        _ => panic!("wrong message type"),
+            //    };
+            //    let content = match json["E"].is_null() || json["c"].is_null() { 
+            //        true => None,
+            //        false => { 
+            //            let unix_timestamp: &i64 = &json["E"].as_i64().unwrap();
+            //            let timestamp = NaiveDateTime::from_timestamp(*unix_timestamp, 0);
+            //            let closing_price: &f64 = &json["c"].as_str().unwrap().parse::<f64>().unwrap(); 
+            //            Some(PriceReading {
+            //                timestamp,
+            //                price: *closing_price,
+            //            })
+            //        }
+            //    };
+            //    match content {
+            //        Some(c) => println!("Message from stream: {}", c),
+            //        None => println!("Invalid price message received from stream"),
+            //    }
+            //}
         } 
     }
 }

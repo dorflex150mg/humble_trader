@@ -3,11 +3,15 @@ pub mod platform {
         fmt,
         rc::Rc,
     };
+
     use thiserror::Error;
 
     use crate::trader::trader::{Trader, ClientError};
-    use crate::platforms::platform_binance::PlatformBinance;
-    use crate::platforms::platform_binance;
+    use crate::platforms::platform_binance::{self, PlatformBinance};
+    use websocket::{sync::Client,
+                    stream::sync::NetworkStream,
+    };
+    //use crate::platforms::platform_binance;
 
     #[derive(Error, Debug)]
     pub enum PlatformError {
@@ -32,8 +36,8 @@ pub mod platform {
 
     pub trait Platform {
         fn get_name(&self) -> Rc<str>;
-        fn subscribe<'a>(&'a self, trader: &'a mut Trader) -> Result<&mut Trader, ClientError>;
-        fn read_stream<'a>(&'a self, trader: &'a mut Trader) -> ();
+        fn subscribe<'a>(&'a self, client: &'a mut Client<Box<dyn NetworkStream + std::marker::Send>>, subs_endpoint: &str) -> Result<&mut Client<Box<dyn NetworkStream + std::marker::Send>>, ClientError>;
+        fn read_stream<'a>(&'a self, client: &'a mut Client<Box<dyn NetworkStream + std::marker::Send>>) -> ();
     }
 
 }

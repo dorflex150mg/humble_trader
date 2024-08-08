@@ -12,10 +12,10 @@ async fn main() {
         .unwrap()
         .build("binance".to_string())
         .unwrap();
-    let subs_trader = trader
+    let client = &mut trader
         .subscribe() 
         .unwrap();
     //println!("reading: {}", subs_trader.read_stream());
-    subs_trader.read_stream();
+    let _ = &mut trader.platform.read_stream(&mut trader.client);
 }
 
